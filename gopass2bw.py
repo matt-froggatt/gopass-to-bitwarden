@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 import argparse
-import yaml
 import json
 import os
 import re
 import datetime
 import uuid
 
+import yaml
 import gnupg
 
 JSON_DEFAULT = {
