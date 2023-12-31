@@ -1,12 +1,51 @@
 #!/usr/bin/env python3
 
 import argparse
-import csv
 import yaml
 import json
 import os
+import re
+import datetime
+import uuid
 
 import gnupg
+
+JSON_DEFAULT = {
+    "encrypted": False,
+    "folders": [],
+    "items": []
+}
+
+URI_DEFAULT = {
+    "match": None,
+    "uri": None
+}
+
+LOGIN_DEFAULT_DATA = {
+    "fido2Credentials": [],
+    "uris": [
+    ],
+    "username": None,
+    "password": None,
+    "totp": None
+}
+
+ITEM_DEFAULT_DATA = {
+    "passwordHistory": None,
+    "revisionDate": None,
+    "creationDate": None,
+    "deletedDate": None,
+    "id": None,
+    "organizationId": None,
+    "folderId": None,
+    "type": 1,
+    "reprompt": 0,
+    "name": None,
+    "notes": None,
+    "favorite": False,
+    "login": None,
+    "collectionIds": None
+}
 
 def data_from_decrypted_yaml(decrypted_data: str):
     password, _, remaining_data = decrypted_data.partition("\n")
@@ -20,35 +59,74 @@ def data_from_decrypted_yaml(decrypted_data: str):
     return username, password
 
 def get_password_data_from_gpg_files(gpg_files: [str], binary, agent):
-        passwords = {}
+        data = []
         for file in gpg_files:
             default_username = file.name
             decrypted_data = decrypt(file, binary, agent)
             username, password = data_from_decrypted_yaml(decrypted_data["data"])
             username = username or default_username
-            passwords[username] = password
-        return passwords
+            data.append({"password": password, "username": username})
+        return data
+
+def format_url(url):
+    if not re.match('(?:http|ftp|https)://', url):
+        return 'https://{}'.format(url)
+    return url
+
+def create_uris(website):
+    uri_dict = URI_DEFAULT
+    uri_dict.update({"uri": format_url(website)})
+    return [uri_dict]
+
+def create_login(website, user_pw_dict):
+    login = LOGIN_DEFAULT_DATA
+    login.update(user_pw_dict)
+    login.update({"uris": create_uris(website)})
+    print(website, user_pw_dict["username"])
+    return login
+
+def create_item(website, user_pw_dict):
+    item = ITEM_DEFAULT_DATA
+    date = datetime.datetime.now(datetime.UTC).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+    item.update({"login": create_login(website, user_pw_dict)})
+    item.update({"name": website})
+    item.update({"revisionDate": date})
+    item.update({"creationDate": date})
+    item.update({"id": str(uuid.uuid4())})
+    return item
+
+
+def get_items_from_website_data(website_data_dict):
+    items = []
+    for website in website_data_dict:
+        for user_pw_dict in website_data_dict[website]:
+            items.append(create_item(website, user_pw_dict))
+
+    return items
+    
 
 def get_password_data(website_doc: str, binary, agent):
     website_name = ""
-    passwords = {}
+    user_pws_list = {}
+    logins = []
     if os.path.isdir(website_doc):
         website_name = os.path.basename(website_doc)
-        passwords = get_password_data_from_gpg_files(os.scandir(website_doc), binary, agent)
+        user_pws_list = get_password_data_from_gpg_files(os.scandir(website_doc), binary, agent)
     else:
         website_name = os.path.basename(website_doc).removesuffix(".gpg")
-        passwords = get_password_data_from_gpg_files([website_doc], binary, agent)
+        user_pws_list = get_password_data_from_gpg_files([website_doc], binary, agent)
 
-    return {website_name: passwords}
+    return {website_name: user_pws_list}
     
 
 def traverse(directory, binary, agent):
-    websites = {}
+    items = []
     for website_dir in os.scandir(directory):
         website_data = get_password_data(website_dir, binary, agent)
-        websites.update(website_data)
+        website_items = get_items_from_website_data(website_data)
+        items.extend(website_items)
 
-    return websites
+    return items
 
 
 def decrypt(path, binary, agent):
@@ -73,6 +151,10 @@ def write(data, output_file):
         json_str = json.dumps(data, indent=4)
         json_file.write(json_str)
 
+def get_json_data_from_items(items_filled):
+    json_data = JSON_DEFAULT
+    json_data.update({"items": items_filled})
+    return json_data
 
 def main():
     parser = argparse.ArgumentParser(description='Export password-store data to Bitwarden CSV format.')
@@ -89,7 +171,9 @@ def main():
 
     password_store = os.path.expanduser(args.directory)
 
-    json_data = traverse(password_store, args.binary, args.agent)
+    items_filled = traverse(password_store, args.binary, args.agent)
+
+    json_data = get_json_data_from_items(items_filled)
 
     write(json_data, args.output)
 
