@@ -74,19 +74,19 @@ def format_url(url):
     return url
 
 def create_uris(website):
-    uri_dict = URI_DEFAULT
+    uri_dict = URI_DEFAULT.copy()
     uri_dict.update({"uri": format_url(website)})
     return [uri_dict]
 
 def create_login(website, user_pw_dict):
-    login = LOGIN_DEFAULT_DATA
+    login = LOGIN_DEFAULT_DATA.copy()
     login.update(user_pw_dict)
     login.update({"uris": create_uris(website)})
     print(website, user_pw_dict["username"])
     return login
 
 def create_item(website, user_pw_dict):
-    item = ITEM_DEFAULT_DATA
+    item = ITEM_DEFAULT_DATA.copy()
     date = datetime.datetime.now(datetime.UTC).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
     item.update({"login": create_login(website, user_pw_dict)})
     item.update({"name": website})
@@ -108,7 +108,6 @@ def get_items_from_website_data(website_data_dict):
 def get_password_data(website_doc: str, binary, agent):
     website_name = ""
     user_pws_list = {}
-    logins = []
     if os.path.isdir(website_doc):
         website_name = os.path.basename(website_doc)
         user_pws_list = get_password_data_from_gpg_files(os.scandir(website_doc), binary, agent)
@@ -152,7 +151,7 @@ def write(data, output_file):
         json_file.write(json_str)
 
 def get_json_data_from_items(items_filled):
-    json_data = JSON_DEFAULT
+    json_data = JSON_DEFAULT.copy()
     json_data.update({"items": items_filled})
     return json_data
 
