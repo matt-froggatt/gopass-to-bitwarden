@@ -56,7 +56,7 @@ def data_from_decrypted_yaml(decrypted_data: str):
     if yaml_data != None:
         username = yaml_data.get("user") or yaml_data.get("User") or yaml_data.get("username") or yaml_data.get("Username")
 
-    return username, password
+    return str(username), password
 
 def get_password_data_from_gpg_files(gpg_files: [str], binary, agent):
         data = []
@@ -179,3 +179,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# TODO figure out which record is causing error and why
